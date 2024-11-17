@@ -14,7 +14,8 @@ class TestGenerateTeam(unittest.TestCase):
         }
 
         # Generate the teams
-        teams = generate_team(players=5)
+        players = ["jonatas", "arthur", "wanis", "loui"]
+        teams = generate_team(players)
 
         red_team = [i["name"] for i in teams['red_team']]
         blue_team = [i["name"] for i in teams['blue_team']]
@@ -25,8 +26,11 @@ class TestGenerateTeam(unittest.TestCase):
         self.assertEqual(len(red_team), len(set(red_team)))
         self.assertEqual(len(blue_team), len(set(blue_team)))
 
-        self.assertEqual(len(red_team), 5)
-        self.assertEqual(len(blue_team), 5)
+        # Assert no repeated champions between teams
+        self.assertEqual(len(set(red_team).intersection(set(blue_team))), 0)
+
+        self.assertEqual(len(red_team), 4)
+        self.assertEqual(len(blue_team), 4)
 
 
 if __name__ == '__main__':

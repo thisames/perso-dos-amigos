@@ -10,39 +10,69 @@ def get_champion_image(champion_name):
     return f"https://ddragon.leagueoflegends.com/cdn/14.22.1/img/champion/{champion_name}.png"
 
 
-def generate_team(players=5):
+def generate_team(nicknames):
+    players = len(nicknames) // 2
+
+    if players is None:
+        if nicknames % 2 != 0:
+            raise ValueError("The number of players must be even")
+
     champions = get_chamption_data()
 
     champions_names = list(champions.keys())
     champions_qnt = len(champions_names)
 
-    red_team_names = []
-    blue_team_names = []
+    red_team_champion_names = []
+    blue_team_champion_names = []
 
+    control_map = {}
     for i in range(players * 2):
-        choice_blue = random.randint(0, champions_qnt - 1)
-        choice_red = random.randint(0, champions_qnt - 1)
-
-        while champions_names[choice_blue] is None:
+        while True:
             choice_blue = random.randint(0, champions_qnt - 1)
+            if control_map.get(choice_blue, None) is None:
+                control_map[choice_blue] = True
+                break
 
-        while champions_names[choice_red] is None:
+        while True:
             choice_red = random.randint(0, champions_qnt - 1)
+            if control_map.get(choice_red, None) is None:
+                control_map[choice_red] = True
+                break
 
-        red_team_names.append(champions_names[choice_red])
-        blue_team_names.append(champions_names[choice_blue])
-        champions_names[choice_blue] = None
-        champions_names[choice_red] = None
 
-    red_team = [{"image": get_champion_image(i), "name": i} for i in red_team_names]
+        red_team_champion_names.append(champions_names[choice_red])
+        blue_team_champion_names.append(champions_names[choice_blue])
 
-    blue_team = [{"image": get_champion_image(i), "name": i} for i in blue_team_names]
+
+    red_champions = [{"image": get_champion_image(i), "name": i} for i in red_team_champion_names]
+
+    blue_champions = [{"image": get_champion_image(i), "name": i} for i in blue_team_champion_names]
+
+    control_map = {}
+
+    red_team_players = []
+    blue_team_players = []
+    for i in range(players):
+        while True:
+            choice_blue = random.randint(0, len(nicknames) - 1)
+            if control_map.get(choice_blue, None) is None:
+                control_map[choice_blue] = True
+                break
+
+        while True:
+            choice_red = random.randint(0, len(nicknames) - 1)
+            if control_map.get(choice_red, None) is None:
+                control_map[choice_red] = True
+                break
+
+        red_team_players.append(nicknames[choice_red])
+        blue_team_players.append(nicknames[choice_blue])
 
     return {
-        'red_team': red_team,
-        'blue_team': blue_team,
+        'red_team': {"champions" : red_champions, "players": red_team_players},
+        'blue_team': {"champions" : blue_champions, "players": blue_team_players},
     }
 
 
 if __name__ == '__main__':
-    generate_team()
+    print(generate_team(["jonata", "wanis", "loui", "jp", "arthur", "tales", "karen"]))
