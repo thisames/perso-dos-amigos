@@ -1,4 +1,4 @@
-from src.champions import get_chamption_data
+from team_generator.champions import get_chamption_data
 import random
 import logging
 
@@ -10,7 +10,7 @@ def get_champion_image(champion_name):
     return f"https://ddragon.leagueoflegends.com/cdn/14.22.1/img/champion/{champion_name}.png"
 
 
-def generate_team(nicknames):
+def generate_team(nicknames, qnt_champions):
     players = len(nicknames) // 2
 
     if players is None:
@@ -26,7 +26,7 @@ def generate_team(nicknames):
     blue_team_champion_names = []
 
     control_map = {}
-    for i in range(players * 2):
+    for i in range(qnt_champions):
         while True:
             choice_blue = random.randint(0, champions_qnt - 1)
             if control_map.get(choice_blue, None) is None:

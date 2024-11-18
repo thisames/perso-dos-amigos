@@ -1,1 +1,5 @@
 **/__pycache__/**
+.env
+credenciais_firebase.json
+
+bot-env/

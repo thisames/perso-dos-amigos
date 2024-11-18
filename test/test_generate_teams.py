@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch
-from src.team_generator.main import generate_team
+from src.team_generator.generator import generate_team
 
 
 class TestGenerateTeam(unittest.TestCase):
