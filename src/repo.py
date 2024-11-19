@@ -29,6 +29,11 @@ def get_players():
     return result
 
 
+def get_player_by_id(player):
+    player = db.collection("players").document(player).get()
+    return player
+
+
 def get_players_max_size():
     players_ref = db.collection("players")
     result = players_ref.count().get()
@@ -37,7 +42,16 @@ def get_players_max_size():
 
 def add_active_players(players):
     players_ref = db.collection("active_players").document('players')
-    players_ref.set({"list": firestore.ArrayUnion(players)})
+
+    if players_ref.get().exists:
+        players_ref.update({"list": firestore.ArrayUnion(players)})
+    else:
+        players_ref.set({"list": players})
+
+
+def remove_active_player(player):
+    players_ref = db.collection("active_players").document('players')
+    players_ref.update({"list": firestore.ArrayRemove([player])})
 
 
 def clear_active_players():
@@ -47,6 +61,12 @@ def clear_active_players():
 
 def get_active_players():
     players = db.collection("active_players").document("players").get()
-    print(players)
-    print(players.to_dict())
     return players.get("list")
+
+
+def store_match(match):
+    matches_ref = db.collection("matches")
+    match['timestamp'] = firestore.SERVER_TIMESTAMP
+    result = matches_ref.add(match)
+    print(result)
+
