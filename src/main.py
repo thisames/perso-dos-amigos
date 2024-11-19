@@ -61,7 +61,6 @@ class DeleteButton(discord.ui.Button):
         await interaction.response.send_message("Jogador removido!",  ephemeral=True)
 
 
-
 class DeleteButtons(discord.ui.View):
     def __init__(self, players):
         super().__init__(timeout=None)

@@ -68,5 +68,4 @@ def store_match(match):
     matches_ref = db.collection("matches")
     match['timestamp'] = firestore.SERVER_TIMESTAMP
     result = matches_ref.add(match)
-    print(result)
 
