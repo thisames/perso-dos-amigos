@@ -1,4 +1,3 @@
-from team_generator.champions import get_chamption_data
 import random
 import logging
 
@@ -6,69 +5,31 @@ logging.basicConfig(format='%(levelname)s %(name)s %(asctime)s: %(message)s', le
 logger = logging.getLogger("team_generator")
 
 
-def get_champion_image(champion_name):
-    return f"https://ddragon.leagueoflegends.com/cdn/14.22.1/img/champion/{champion_name}.png"
-
-
-def generate_team(nicknames):
+def generate_team(nicknames, champions):
     players = len(nicknames) // 2
 
     if players is None:
         if nicknames % 2 != 0:
             raise ValueError("The number of players must be even")
 
-    champions = get_chamption_data()
-
-    champions_names = list(champions.keys())
-    champions_qnt = len(champions_names)
-
     red_team_champion_names = []
     blue_team_champion_names = []
 
-    control_map = {}
     for i in range(players * 2):
-        while True:
-            choice_blue = random.randint(0, champions_qnt - 1)
-            if control_map.get(choice_blue, None) is None:
-                control_map[choice_blue] = True
-                break
+        choice_blue = random.randint(0, len(champions) - 1)
+        blue_team_champion_names.append(champions[choice_blue])
+        del champions[choice_blue]
 
-        while True:
-            choice_red = random.randint(0, champions_qnt - 1)
-            if control_map.get(choice_red, None) is None:
-                control_map[choice_red] = True
-                break
+        choice_red = random.randint(0, len(champions) - 1)
+        red_team_champion_names.append(champions[choice_red])
+        del champions[choice_red]
 
+    random.shuffle(nicknames)
 
-        red_team_champion_names.append(champions_names[choice_red])
-        blue_team_champion_names.append(champions_names[choice_blue])
-
-
-    red_champions = [{"image": get_champion_image(i), "name": i} for i in red_team_champion_names]
-
-    blue_champions = [{"image": get_champion_image(i), "name": i} for i in blue_team_champion_names]
-
-    control_map = {}
-
-    red_team_players = []
-    blue_team_players = []
-    for i in range(players):
-        while True:
-            choice_blue = random.randint(0, len(nicknames) - 1)
-            if control_map.get(choice_blue, None) is None:
-                control_map[choice_blue] = True
-                break
-
-        while True:
-            choice_red = random.randint(0, len(nicknames) - 1)
-            if control_map.get(choice_red, None) is None:
-                control_map[choice_red] = True
-                break
-
-        red_team_players.append(nicknames[choice_red])
-        blue_team_players.append(nicknames[choice_blue])
+    red_team_players = nicknames[:len(nicknames) // 2]
+    blue_team_players = nicknames[len(nicknames) // 2:]
 
     return {
-        'red_team': {"champions" : red_champions, "players": red_team_players},
-        'blue_team': {"champions" : blue_champions, "players": blue_team_players},
+        'red_team': {"champions": red_team_champion_names, "players": red_team_players},
+        'blue_team': {"champions": blue_team_champion_names, "players": blue_team_players},
     }

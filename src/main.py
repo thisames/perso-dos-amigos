@@ -1,18 +1,18 @@
-import math
-
 import discord
-from imageio.v2 import imread
 import os
-import repo
 import io
 
-from team_generator.generator import generate_team
+import src.repos.firebase_repo as repo
+from src.discord_model.view import TeamSelectView, DeleteButtons, ResultButtons
+
+from src.repos.champions_repo import ImageDict
+from src.team_generator.generator import generate_team
 from dotenv import load_dotenv
-import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import ImageGrid
+from PIL import Image
 
 load_dotenv()
 bot = discord.Bot()
+data = ImageDict()
 
 
 @bot.event
@@ -25,83 +25,6 @@ async def on_ready():
             state="Fraudando as urnas...."
         )
     )
-
-
-class TeamSelect(discord.ui.Select):
-    async def callback(self, interaction: discord.Interaction):
-        repo.add_active_players(self.values)
-
-        await interaction.message.edit("Os jogadores foram adicionados a lista de ativos.", view=None)
-
-
-class TeamSelectView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-        players = repo.get_players()
-        players_options = []
-        for player in players:
-            players_options.append(discord.SelectOption(label=player.get("nome"), value=player.id))
-
-        select = TeamSelect(
-            placeholder="Escolha os jogadores ativos!",
-            min_values=1,
-            max_values=repo.get_players_max_size(),
-            options=players_options
-        )
-
-        self.add_item(select)
-
-
-class DeleteButton(discord.ui.Button):
-    async def callback(self, interaction: discord.Interaction):
-        player_id = self.custom_id
-        repo.remove_active_player(player_id)
-
-        # Isso aqui tá feio demais kkkkkkkkkkkkkkkkkkkkkkkkkkk
-        players = repo.get_active_players()
-
-        embed = discord.Embed(
-            title="Jogadores ativos",
-            color=discord.Colour.blurple(),
-        )
-
-        for idx, player in enumerate(players):
-            player_info = repo.get_player_by_id(player)
-            embed.add_field(name=f"Jogador {idx + 1}", value=f"<@{player_info.get('discord_id')}>", inline=True)
-
-        await interaction.message.edit(embed=embed, view=DeleteButtons(players))
-        await interaction.response.send_message("Jogador removido!", ephemeral=True)
-
-
-class DeleteButtons(discord.ui.View):
-    def __init__(self, players):
-        super().__init__(timeout=None)
-
-        for idx, player in enumerate(players):
-            button = DeleteButton(
-                label=f"Jogador {idx + 1}",
-                custom_id=player,
-                style=discord.ButtonStyle.red
-            )
-            self.add_item(button)
-
-
-class ResultButtons(discord.ui.View):
-    def __init__(self, match_id):
-        super().__init__(timeout=None)
-
-        self.match_id = match_id
-
-    @discord.ui.button(label="Vitoria para o time azul", style=discord.ButtonStyle.blurple)
-    async def blue_button_callback(self, button, interaction):
-        repo.set_match_victory(self.match_id, "BLUE")
-        await interaction.message.edit(view=None)
-
-    @discord.ui.button(label="Vitoria para o time vermelho", style=discord.ButtonStyle.red)
-    async def red_button_callback(self, button, interaction):
-        repo.set_match_victory(self.match_id, "RED")
-        await interaction.message.edit(view=None)
 
 
 @bot.slash_command(name="adicionar", description="Adiciona jogadores a lista de ativos")
@@ -146,12 +69,24 @@ async def ativos(ctx):
             print(repr(e))
 
 
+async def send_embed(player_info, embed):
+    player_discord = await bot.fetch_user(player_info.get("discord_id"))
+
+    embed["file"].seek(0)
+    file = discord.File(fp=embed["file"], filename="image.png")
+
+    try:
+        await player_discord.send(file=file, embed=embed["embed"])
+    except discord.Forbidden:
+        print(f"Failed to send message to user {player_discord.name}")
+
+
 @bot.slash_command(name="sortear", description="Sortea os times e campeões")
 async def sortear(ctx):
     if await block_trolls(ctx):
         await ctx.response.defer()
         players = repo.get_active_players()
-        result = generate_team(players)
+        result = generate_team(players, list(data))
         match_id = repo.store_match(result)
 
         blue_embed = generate_embed(result.get("blue_team").get("champions"), discord.Colour.blue())
@@ -160,25 +95,23 @@ async def sortear(ctx):
         blue_team_players = ""
         for idx, player in enumerate(result.get("blue_team").get("players")):
             player_info = repo.get_player_by_id(player)
-            player_discord = await bot.fetch_user(player_info.get("discord_id"))
-            await player_discord.send(file=blue_embed["file"], embed=blue_embed["embed"])
+            await send_embed(player_info, blue_embed)
             blue_team_players += f"{idx + 1} - <@{player_info.get('discord_id')}>\n"
 
         red_team_players = ""
         for idx, player in enumerate(result.get("red_team").get("players")):
             player_info = repo.get_player_by_id(player)
-            player_discord = await bot.fetch_user(player_info.get("discord_id"))
-            await player_discord.send(file=red_embed["file"], embed=red_embed["embed"])
+            await send_embed(player_info, red_embed)
             red_team_players += f"{idx + 1} - <@{player_info.get('discord_id')}>\n"
 
         embed = discord.Embed(
             title="Partidazuda",
-            description="Em um embate do bem contra o mal, quem vencera?",
+            description="Em um embate do bem contra o mal, quem vencerá?",
             color=discord.Colour.blurple(),
         )
         embed.add_field(name="Time azul (Lado esquerdo)", value=blue_team_players)
         embed.add_field(name="Time vermelho (Lado direito)", value=red_team_players)
-        await ctx.followup.send(embed=embed, view=ResultButtons(match_id))
+        await ctx.followup.send(embed=embed, view=ResultButtons(match_id, ctx.author.id))
 
 
 @bot.slash_command(name="registrar", description="Adicionar jogador")
@@ -221,7 +154,7 @@ async def vitorias(ctx):
 
         result = ""
         for idx, player in enumerate(victory_count.items()):
-            result += f"{idx+1}º <@{player_map.get(player[0]).get('discord_id')}> - {player[1]} vitorias\n"
+            result += f"{idx + 1}º <@{player_map.get(player[0]).get('discord_id')}> - {player[1]} vitorias\n"
 
         embed = discord.Embed(
             title="Rankzudo",
@@ -234,39 +167,22 @@ async def vitorias(ctx):
 def generate_embed(champions_list, colour):
     champion_string = ""
 
-    rows = math.ceil(len(champions_list) / 5)
-    cols = min(len(champions_list), 5)
+    max_width, max_height = 680, 281
 
-    fig_width = cols * 2
-    fig_height = rows * 2
+    new_im = Image.new('RGBA', (max_width, max_height), (255, 0, 0, 0))
 
-    fig = plt.figure(figsize=(fig_width, fig_height), facecolor="gray")
+    x_offset = 10
+    y_offset = 10
+    for champion in champions_list:
+        champion_data = data[champion]
+        champion_string += f"{champion_data['name']}\n"
+        img = Image.open(io.BytesIO(champion_data["image"]))
+        new_im.paste(img, (x_offset, y_offset))
 
-    grid = ImageGrid(fig, 111,
-                     nrows_ncols=(rows, cols),
-                     axes_pad=0.2,
-                     )
-
-    for i in range(rows):
-        for j in range(cols):
-            idx = i * cols + j
-
-            ax = grid[idx]
-            if idx < len(champions_list):
-                champion_string += f"{champions_list[idx]['name']}\n"
-                ax.text(10, 5, champions_list[idx]["name"], bbox={"facecolor": "white", "pad": 1})
-
-                temp_image = imread(champions_list[idx]["image"])
-                ax.imshow(temp_image)
-                ax.set_xticks([])
-                ax.set_yticks([])
-            else:
-                ax.set_facecolor("none")
-                ax.axis("off")
-
-    image_buffer = io.BytesIO()
-    fig.savefig(image_buffer, format="png")
-    image_buffer.seek(0)
+        x_offset += 133
+        if x_offset >= max_width - 10:
+            x_offset = 10
+            y_offset += 133
 
     embed = discord.Embed(
         title="Só os bonecudos",
@@ -274,9 +190,11 @@ def generate_embed(champions_list, colour):
         color=colour,
     )
 
-    file = discord.File(fp=image_buffer, filename="image.png")
+    image_buffer = io.BytesIO()
+    new_im.save(image_buffer, format='PNG')
+
     embed.set_image(url="attachment://image.png")
-    return {"embed": embed, "file": file}
+    return {"embed": embed, "file": image_buffer}
 
 
 async def block_trolls(ctx):
