@@ -22,7 +22,7 @@ async def on_ready():
         activity=discord.Activity(
             type=discord.ActivityType.custom,
             name="custom",
-            state="Fraudando as urnas...."
+            state="Fraudando as runas...."
         )
     )
 
