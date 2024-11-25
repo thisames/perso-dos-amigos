@@ -2,11 +2,11 @@ import discord
 import os
 import io
 
-import src.repos.firebase_repo as repo
-from src.discord_model.view import TeamSelectView, DeleteButtons, ResultButtons
+import repos.firebase_repo as repo
+from discord_model.view import TeamSelectView, DeleteButtons, ResultButtons
 
-from src.repos.champions_repo import ImageDict
-from src.team_generator.generator import generate_team
+from repos.champions_repo import ImageDict
+from team_generator.generator import generate_team
 from dotenv import load_dotenv
 from PIL import Image
 
