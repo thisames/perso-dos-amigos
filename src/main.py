@@ -4,6 +4,7 @@ import io
 
 import src.repos.firebase_repo as repo
 from src.discord_model.view import TeamSelectView, DeleteButtons, ResultButtons
+from discord import Option, OptionChoice
 
 from src.repos.champions_repo import ImageDict
 from src.team_generator.generator import generate_team
@@ -28,33 +29,59 @@ async def on_ready():
 
 
 @bot.slash_command(name="adicionar", description="Adiciona jogadores a lista de ativos")
-async def adicionar(ctx):
+async def adicionar(
+        ctx: discord.ApplicationContext,
+        fixed: Option(int, "Os times serão fixos", name="fixos", default=False,
+                      choices=[OptionChoice("Sim", value=True), OptionChoice("Não", value=False)])):
     if await block_trolls(ctx):
-        try:
-            await ctx.response.defer()
-            await ctx.followup.send("Monta o time!", view=TeamSelectView(), ephemeral=True)
-        except Exception as e:
-            print(repr(e))
+        await ctx.response.defer(ephemeral=True)
+        if fixed:
+            repo.set_config("fixed_teams", True)
+            await ctx.followup.send("Monte os times!", view=TeamSelectView(["A", "B"]))
+        else:
+            if repo.get_config("fixed_teams"):
+                await ctx.followup.send("Modo de times fixos, caso queira alterar use o /limpar!")
+                return
+
+            await ctx.followup.send("Monta o time!", view=TeamSelectView())
 
 
 @bot.slash_command(name="limpar", description="Apaga todos os jogadores da lista de ativos")
 async def limpar(ctx):
     if await block_trolls(ctx):
-        try:
-            await ctx.response.defer()
-            repo.clear_active_players()
-            await ctx.followup.send("A lista de jogadores ativos foi esvaziada!")
-        except Exception as e:
-            print(repr(e))
+        await ctx.response.defer(ephemeral=True)
+        repo.clear_active_players()
+        await ctx.followup.send("A lista de jogadores ativos foi esvaziada!")
 
 
 @bot.slash_command(name="ativos", description="Mostra os jogadores ativos")
 async def ativos(ctx):
     if await block_trolls(ctx):
-        try:
-            await ctx.response.defer()
-            players = repo.get_active_players()
+        await ctx.response.defer()
+        players = repo.get_active_players()
 
+        if repo.get_config("fixed_teams"):
+            embed = discord.Embed(
+                title="Times montados",
+                color=discord.Colour.blurple(),
+            )
+
+            team = ""
+            for idx, player in enumerate(players.get("A")):
+                player_info = repo.get_player_by_id(player)
+                team += f"{idx + 1} - <@{player_info.get('discord_id')}>\n"
+
+            embed.add_field(name=f"Time A", value=team, inline=True)
+
+            team = ""
+            for idx, player in enumerate(players.get("B")):
+                player_info = repo.get_player_by_id(player)
+                team += f"{idx + 1} - <@{player_info.get('discord_id')}>\n"
+
+            embed.add_field(name=f"Time B", value=team, inline=True)
+
+            await ctx.followup.send(embed=embed)
+        else:
             embed = discord.Embed(
                 title="Jogadores ativos",
                 color=discord.Colour.blurple(),
@@ -65,8 +92,6 @@ async def ativos(ctx):
                 embed.add_field(name=f"Jogador {idx + 1}", value=f"<@{player_info.get('discord_id')}>", inline=True)
 
             await ctx.followup.send(embed=embed, view=DeleteButtons(players))
-        except Exception as e:
-            print(repr(e))
 
 
 async def send_embed(player_info, embed):
@@ -86,7 +111,7 @@ async def sortear(ctx):
     if await block_trolls(ctx):
         await ctx.response.defer()
         players = repo.get_active_players()
-        result = generate_team(players, list(data))
+        result = generate_team(players, list(data), repo.get_config("fixed_teams"))
         match_id = repo.store_match(result)
 
         blue_embed = generate_embed(result.get("blue_team").get("champions"), discord.Colour.blue())
@@ -117,48 +142,86 @@ async def sortear(ctx):
 @bot.slash_command(name="registrar", description="Adicionar jogador")
 async def registrar(ctx, nome: str, user: discord.User):
     if await block_trolls(ctx):
-        try:
-            await ctx.response.defer()
-            repo.set_player(nome, user)
-            await ctx.followup.send(f"{nome} registrado com sucesso.", ephemeral=True)
-        except Exception as e:
-            print(repr(e))
+        await ctx.response.defer(ephemeral=True)
+        repo.set_player(nome, user)
+        await ctx.followup.send(f"{nome} registrado com sucesso.")
 
 
 @bot.slash_command(name="vitorias", description="Quantifica as vitorias de cada jogador")
-async def vitorias(ctx):
+async def vitorias(
+        ctx: discord.ApplicationContext,
+        mode: Option(int, "Escolha o modo de jogo", default=0,
+                     choices=[OptionChoice("Todos", value=0), OptionChoice("5X5", value=5),
+                              OptionChoice("4X4", value=4), OptionChoice("3X3", value=3)])):
     if await block_trolls(ctx):
         await ctx.response.defer()
         players = repo.get_players()
-        matches = repo.get_finished_matches()
+        matches = repo.get_finished_matches(mode)
 
-        player_map = {}
-        for player in players:
-            player_map[player.id] = player
-
-        victory_count = {}
+        stats = {player.id: {"id": player.get("discord_id"), "wins": 0} for player in players}
 
         for match in matches:
-            if match.get("result") == "BLUE":
-                winners = match.get("blue_team")["players"]
-            else:
-                winners = match.get("red_team")["players"]
+            winning_team = match.get("blue_team") if match.get("result") == "BLUE" else match.get("red_team")
 
-            for player in winners:
-                if player not in victory_count:
-                    victory_count[player] = 0
+            for player_id in winning_team["players"]:
+                stats[player_id]["wins"] += 1
 
-                victory_count[player] += 1
+        result_list = sorted(stats.items(), key=lambda x: x["wins"], reverse=True)
 
-        victory_count = dict(sorted(victory_count.items(), key=lambda item: item[1], reverse=True))
-
-        result = ""
-        for idx, player in enumerate(victory_count.items()):
-            result += f"{idx + 1}º <@{player_map.get(player[0]).get('discord_id')}> - {player[1]} vitorias\n"
+        result_strings = [
+            f"{rank + 1}º - <@{player['id']}> - {player['wins']} vitorias"
+            for rank, player in enumerate(result_list)
+        ]
 
         embed = discord.Embed(
-            title="Rankzudo",
-            description=result
+            title=f"Rankzudo {'Geral' if not mode else f'{mode}X{mode}'}",
+            description="\n".join(result_strings)
+        )
+
+        await ctx.followup.send(embed=embed)
+
+
+@bot.slash_command(name="winrate", description="Quantifica o winrate de cada jogador")
+async def winrate(
+        ctx: discord.ApplicationContext,
+        mode: Option(int, "Escolha o modo de jogo", name="modo", default=0,
+                     choices=[OptionChoice("Todos", value=0), OptionChoice("5X5", value=5),
+                              OptionChoice("4X4", value=4), OptionChoice("3X3", value=3)]),
+        minimal: Option(int, "Quantidade minima de jogos", name="corte", default=10, min_value=1, max_value=30)):
+    if await block_trolls(ctx):
+        await ctx.response.defer()
+        players = repo.get_players()
+        matches = repo.get_finished_matches(mode)
+
+        stats = {player.id: {"id": player.get("discord_id"), "wins": 0, "losses": 0} for player in players}
+
+        for match in matches:
+            winning_team = match.get("blue_team") if match.get("result") == "BLUE" else match.get("red_team")
+            losing_team = match.get("red_team") if match.get("result") == "BLUE" else match.get("blue_team")
+
+            for player_id in winning_team["players"]:
+                stats[player_id]["wins"] += 1
+
+            for player_id in losing_team["players"]:
+                stats[player_id]["losses"] += 1
+
+        result_list = []
+        for player_id, stat in stats.items():
+            total_matches = stat["wins"] + stat["losses"]
+            if total_matches >= minimal:
+                result = (stat["wins"] / total_matches) * 100 if total_matches > 0 else 0
+                result_list.append({"id": stat["id"], "winrate": result, "games": total_matches})
+
+        result_list = sorted(result_list, key=lambda x: x["winrate"], reverse=True)
+
+        result_strings = [
+            f"{rank + 1}º - <@{player['id']}> - {player['winrate']:.2f}% | {player['games']} jogos"
+            for rank, player in enumerate(result_list)
+        ]
+
+        embed = discord.Embed(
+            title=f"Rankzudo {'Geral' if not mode else f'{mode}X{mode}'} - Mínimo de {minimal} jogos",
+            description="\n".join(result_strings)
         )
 
         await ctx.followup.send(embed=embed)

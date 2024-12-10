@@ -6,26 +6,42 @@ class TeamSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         repo.add_active_players(self.values)
 
-        await interaction.message.edit(content="Os jogadores foram adicionados a lista de ativos.", view=None)
+        await interaction.respond(content="Os jogadores foram adicionados a lista de ativos.", ephemeral=True,
+                                  delete_after=5)
+
+
+class FixedTeamSelect(discord.ui.Select):
+    async def callback(self, interaction: discord.Interaction):
+        repo.add_fixed_players(self.values, self.custom_id)
+
+        await interaction.respond(content=f"Os jogadores foram adicionados ao time {self.custom_id}.", ephemeral=True,
+                                  delete_after=5)
 
 
 class TeamSelectView(discord.ui.View):
-    def __init__(self):
+    def __init__(self, teams=None):
         super().__init__(timeout=None)
 
-        players = repo.get_players()
-        players_options = []
-        for player in players:
-            players_options.append(discord.SelectOption(label=player.get("nome"), value=player.id))
+        if (teams is None) or (len(teams) == 0):
+            select = TeamSelect(
+                placeholder="Escolha os jogadores ativos!",
+                min_values=1,
+                max_values=10,
+                select_type=discord.ComponentType.user_select,
+            )
 
-        select = TeamSelect(
-            placeholder="Escolha os jogadores ativos!",
-            min_values=1,
-            max_values=repo.get_players_max_size(),
-            options=players_options
-        )
+            self.add_item(select)
+        else:
+            for team in teams:
+                select = FixedTeamSelect(
+                    placeholder=f"Escolha os jogadores do time {team}!",
+                    min_values=1,
+                    max_values=5,
+                    select_type=discord.ComponentType.user_select,
+                    custom_id=team
+                )
 
-        self.add_item(select)
+                self.add_item(select)
 
 
 class DeleteButton(discord.ui.Button):
