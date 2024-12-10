@@ -1,5 +1,5 @@
 import discord
-import src.repos.firebase_repo as repo
+import repos.firebase_repo as repo
 
 
 class TeamSelect(discord.ui.Select):
