@@ -5,7 +5,7 @@ logging.basicConfig(format='%(levelname)s %(name)s %(asctime)s: %(message)s', le
 logger = logging.getLogger("team_generator")
 
 
-def generate_team(players, champions, fixed_teams):
+def generate_team(players, champions, fixed_teams, choices_number):
     if fixed_teams:
         team_size = len(players.get("A"))
         red_team_players, blue_team_players = (
@@ -28,7 +28,7 @@ def generate_team(players, champions, fixed_teams):
     red_team_champion_names = []
     blue_team_champion_names = []
 
-    for i in range(team_size * 2):
+    for i in range(choices_number if choices_number else team_size * 2):
         choice_blue = random.randint(0, len(champions) - 1)
         blue_team_champion_names.append(champions[choice_blue])
         del champions[choice_blue]
