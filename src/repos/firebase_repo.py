@@ -35,10 +35,10 @@ async def get_players():
     """
     Get all players from the 'players' collection.
     """
-    return db.collection("players").stream()
+    return list(db.collection("players").stream())
 
 
-@cached(ttl=7200)
+@cached(ttl=7200, key_builder=lambda f, *args, **kwargs: f"{f.__name__}:{args[0]}")
 async def get_player_by_id(player_id):
     """
     Get a single player document by its ID.
@@ -46,7 +46,7 @@ async def get_player_by_id(player_id):
     return db.collection("players").document(player_id).get()
 
 
-@cached(ttl=7200)
+@cached(ttl=7200, key_builder=lambda f, *args, **kwargs: f"{f.__name__}:{args[0]}")
 async def get_player_by_discord_id(player_id):
     """
     Get a single player document by its discord ID.
@@ -66,7 +66,7 @@ async def get_players_by_id(ids):
     result.extend(players_ref.where(
         filter=FieldFilter(FieldPath.document_id(), "in", [players_ref.document(_id) for _id in ids])
     ).stream())
-    return result
+    return list(result)
 
 
 async def get_players_by_discord_id(discord_ids):
@@ -132,7 +132,7 @@ async def get_active_players():
         return teams_discord
     else:
         player_list = db.collection("matches_settings").document("pool").get().get("list")
-        return await get_players_by_id(player_list) if player_list else []
+        return list(await get_players_by_id(player_list) if player_list else [])
 
 
 # Fixed Teams Management
@@ -175,7 +175,7 @@ async def set_match_victory(match_id, result):
     await get_matches_by_player.cache.clear()
 
 
-@cached(ttl=7200)
+@cached(ttl=7200, key_builder=lambda f, *args, **kwargs: f"{f.__name__}:{args[0]}")
 async def get_finished_matches(mode):
     """
     Retrieve all finished matches with optional filtering by mode.
@@ -183,10 +183,10 @@ async def get_finished_matches(mode):
     query = db.collection("matches").where(filter=FieldFilter("result", "!=", 'UNFINISHED'))
     if mode:
         query = query.where(filter=FieldFilter("mode", "==", mode))
-    return query.stream()
+    return list(query.stream())
 
 
-@cached(ttl=7200)
+@cached(ttl=7200, key_builder=lambda f, *args, **kwargs: f"{f.__name__}:{args[0]}:{args[1]}")
 async def get_matches_by_player(player_id, limit):
     """
     Retrieve the last N matches of the specified player.
@@ -206,7 +206,7 @@ async def get_matches_by_player(player_id, limit):
         .limit(limit)
     )
 
-    return query.stream()
+    return list(query.stream())
 
 
 # Configuration Management
@@ -219,7 +219,7 @@ async def set_config(config, value):
     await get_config.cache.clear()
 
 
-@cached(ttl=7200)
+@cached(ttl=7200, key_builder=lambda f, *args, **kwargs: f"{f.__name__}:{args[0]}")
 async def get_config(config):
     """
     Get a specific configuration value.

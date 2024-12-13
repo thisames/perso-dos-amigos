@@ -117,7 +117,7 @@ class ResultButtons(discord.ui.View):
         """
         Handle match result submission based on the user's interaction.
         """
-        if interaction.user.id != self.author_id or interaction.user.guild_permissions.administrator:
+        if interaction.user.id != self.author_id and not interaction.user.guild_permissions.administrator:
             await interaction.response.send_message(
                 "Somente a pessoa que usou o comando pode definir os ganhadores!",
                 ephemeral=True,
