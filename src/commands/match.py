@@ -1,15 +1,13 @@
-import datetime
-
 import discord
 import logging
 import asyncio
-import src.repos.firebase_repo as repo
+import repos.firebase_repo as repo
 
 from discord import Bot, Option, OptionChoice
-from src.discord_model.view import TeamSelectView, DeleteButtons, ResultButtons
-from src.repos.champions_repo import ImageDict
-from src.team_generator.generator import generate_team
-from src.utils.embed import create_champion_embed, create_active_players_embed, create_active_team_embed
+from discord_model.view import TeamSelectView, DeleteButtons, ResultButtons
+from repos.champions_repo import ImageDict
+from team_generator.generator import generate_team
+from utils.embed import create_champion_embed, create_active_players_embed, create_active_team_embed
 
 logging.basicConfig(format='%(levelname)s %(name)s %(asctime)s: %(message)s', level=logging.INFO)
 logger = logging.getLogger("c/match")
@@ -25,10 +23,10 @@ def register_match_commands(bot: Bot):
                           choices=[OptionChoice("Sim", value=True), OptionChoice("Não", value=False)])):
         await ctx.response.defer(ephemeral=True)
         if fixed:
-            repo.set_config("fixed_teams", True)
+            await repo.set_config("fixed_teams", True)
             await ctx.followup.send("Monte os times!", view=TeamSelectView(["A", "B"]))
         else:
-            if repo.get_config("fixed_teams"):
+            if await repo.get_config("fixed_teams"):
                 await ctx.followup.send("Modo de times fixos, caso queira alterar use o /limpar!")
                 return
 
@@ -37,15 +35,15 @@ def register_match_commands(bot: Bot):
     @bot.slash_command(name="limpar", description="Apaga todos os jogadores da lista de ativos")
     async def clear_active_players(ctx):
         await ctx.response.defer(ephemeral=True)
-        repo.clear_active_players()
+        await repo.clear_active_players()
         await ctx.followup.send("A lista de jogadores ativos foi esvaziada!")
 
     @bot.slash_command(name="ativos", description="Mostra os jogadores ativos")
     async def list_active_players(ctx):
         await ctx.response.defer()
-        players = repo.get_active_players()
+        players = await repo.get_active_players()
 
-        if repo.get_config("fixed_teams"):
+        if await repo.get_config("fixed_teams"):
             embed = create_active_team_embed(players)
             await ctx.followup.send(embed=embed)
         else:
@@ -67,9 +65,9 @@ def register_match_commands(bot: Bot):
     async def sort_active_players(ctx, choices_number: Option(int, "Quantidade de campeões", name="opções", default=0,
                                                               min_value=1, max_value=10)):
         await ctx.response.defer()
-        players = repo.get_active_players()
-        result = generate_team(players, list(data), repo.get_config("fixed_teams"), choices_number)
-        match_id = repo.store_match(result)
+        players = await repo.get_active_players()
+        result = generate_team(players, list(data), await repo.get_config("fixed_teams"), choices_number)
+        match_id = await repo.store_match(result)
 
         blue_embed = create_champion_embed(result.get("blue_team").get("champions"), data, discord.Colour.blue())
         red_embed = create_champion_embed(result.get("red_team").get("champions"), data, discord.Colour.red())
@@ -100,5 +98,5 @@ def register_match_commands(bot: Bot):
     @bot.slash_command(name="registrar", description="Adicionar jogador")
     async def register_new_player(ctx, nome: str, user: discord.User):
         await ctx.response.defer(ephemeral=True)
-        repo.set_player(nome, user)
+        await repo.set_player(nome, user)
         await ctx.followup.send(f"{nome} registrado com sucesso.")

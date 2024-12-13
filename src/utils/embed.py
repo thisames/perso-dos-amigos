@@ -1,8 +1,10 @@
 import io
+from datetime import datetime
+
 import discord
 
 from PIL import Image
-from src.repos.champions_repo import ImageDict
+from repos.champions_repo import ImageDict
 
 
 def create_image_from_champions(champions_list: list[str], data: ImageDict) -> io.BytesIO:
@@ -73,4 +75,35 @@ def create_active_team_embed(players):
         team += f"{idx + 1} - <@{player.get('discord_id')}>\n"
 
     embed.add_field(name=f"Time B", value=team, inline=True)
+    return embed
+
+
+def create_match_history_embed(matches, player):
+    """
+    Create an embed displaying the last matches of player.
+    """
+    embed = discord.Embed(title=f"Últimas Partidas de {player.get('nome')}", color=discord.Colour.blurple())
+
+    if not matches:
+        embed.description = "Este jogador não possui partidas finalizadas."
+        return embed
+
+    for match in matches:
+        match_date = match.get("timestamp")
+        mode = match.get("mode")
+        winner_team = (
+            match.get("blue_team")["players"]
+            if match.get("result") == "BLUE" else
+            match.get("red_team")["players"]
+        )
+        result = player.id in winner_team
+
+        if isinstance(match_date, datetime):
+            match_date = match_date.strftime("%d/%m/%Y %H:%M")
+
+        embed.add_field(
+            name=f"{match_date} - {mode}X{mode}",
+            value=("Vitória" if result else "Derrota"),
+            inline=False
+        )
     return embed

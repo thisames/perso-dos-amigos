@@ -1,7 +1,7 @@
 import discord
-import src.repos.firebase_repo as repo
+import repos.firebase_repo as repo
 
-from src.utils.embed import create_active_players_embed
+from utils.embed import create_active_players_embed
 
 
 class TeamSelect(discord.ui.Select):
@@ -10,7 +10,7 @@ class TeamSelect(discord.ui.Select):
     """
 
     async def callback(self, interaction: discord.Interaction):
-        repo.add_active_players(self.values)
+        await repo.add_active_players(self.values)
 
         await interaction.response.send_message(
             content="Os jogadores foram adicionados à lista de ativos.",
@@ -25,7 +25,7 @@ class FixedTeamSelect(discord.ui.Select):
     """
 
     async def callback(self, interaction: discord.Interaction):
-        repo.add_fixed_players(self.values, self.custom_id)
+        await repo.add_fixed_players(self.values, self.custom_id)
 
         await interaction.response.send_message(
             content=f"Os jogadores foram adicionados ao time {self.custom_id}.",
@@ -74,8 +74,8 @@ class DeleteButton(discord.ui.Button):
         self.player_id = player_id
 
     async def callback(self, interaction: discord.Interaction):
-        repo.remove_active_player(self.player_id)
-        players = repo.get_active_players()
+        await repo.remove_active_player(self.player_id)
+        players = await repo.get_active_players()
 
         embed = create_active_players_embed(players)
         view = DeleteButtons(players)
@@ -91,8 +91,8 @@ class DeleteButtons(discord.ui.View):
 
     def __init__(self, players):
         super().__init__(timeout=None)
-        for idx, player_id in enumerate(players):
-            self.add_item(DeleteButton(player_id=player_id, label=f"Jogador {idx + 1}"))
+        for idx, player in enumerate(players):
+            self.add_item(DeleteButton(player_id=player.id, label=f"Jogador {idx + 1}"))
 
 
 class ResultButtons(discord.ui.View):
@@ -124,5 +124,5 @@ class ResultButtons(discord.ui.View):
             )
             return
 
-        repo.set_match_victory(self.match_id, result)
+        await repo.set_match_victory(self.match_id, result)
         await interaction.message.edit(view=None)

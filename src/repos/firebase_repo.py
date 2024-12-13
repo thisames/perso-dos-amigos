@@ -1,9 +1,10 @@
 import copy
 import os
 import firebase_admin
+from aiocache import cached
 from firebase_admin import credentials
 from firebase_admin import firestore
-from google.cloud.firestore_v1.base_query import FieldFilter
+from google.cloud.firestore_v1.base_query import FieldFilter, Or
 from google.cloud.firestore_v1.field_path import FieldPath
 
 from dotenv import load_dotenv
@@ -17,29 +18,46 @@ db = firestore.client()
 
 
 # Players Management
-def set_player(name, user):
+async def set_player(name, user):
     """
     Add a new player to the 'players' collection.
     """
     players_ref = db.collection("players")
     players_ref.add({"nome": name, "discord_id": user.id})
 
+    get_players.cache_clear()
+    get_player_by_id.cache_clear()
+    get_player_by_discord_id.cache.clear()
 
-def get_players():
+
+@cached(ttl=7200)
+async def get_players():
     """
     Get all players from the 'players' collection.
     """
     return db.collection("players").stream()
 
 
-def get_player_by_id(player_id):
+@cached(ttl=7200)
+async def get_player_by_id(player_id):
     """
     Get a single player document by its ID.
     """
     return db.collection("players").document(player_id).get()
 
 
-def get_players_by_id(ids):
+@cached(ttl=7200)
+async def get_player_by_discord_id(player_id):
+    """
+    Get a single player document by its discord ID.
+    """
+    players_ref = db.collection("players")
+    query = players_ref.where(filter=FieldFilter("discord_id", "==", player_id)).limit(1).stream()
+    player = next(query, None)
+    return player
+
+
+async def get_players_by_id(ids):
     """
     Get players whose IDs are in the provided list.
     """
@@ -51,7 +69,7 @@ def get_players_by_id(ids):
     return result
 
 
-def get_players_by_discord_id(discord_ids):
+async def get_players_by_discord_id(discord_ids):
     """
     Get players whose Discord IDs are in the provided list.
     """
@@ -61,37 +79,45 @@ def get_players_by_discord_id(discord_ids):
 
 
 # Active Players Management
-def add_active_players(players):
+async def add_active_players(players):
     """
     Add players to the active pool.
     """
     players_ref = db.collection("matches_settings").document("pool")
-    firebase_players = [p.id for p in get_players_by_discord_id([player.id for player in players])]
+    firebase_players = [p.id for p in await get_players_by_discord_id([player.id for player in players])]
 
     if players_ref.get().exists:
         players_ref.update({"list": firestore.ArrayUnion(firebase_players)})
     else:
         players_ref.set({"list": firebase_players})
 
+    await get_active_players.cache.clear()
 
-def remove_active_player(player_id):
+
+async def remove_active_player(player_id):
     """
     Remove a player from the active pool.
     """
     players_ref = db.collection("matches_settings").document("pool")
     players_ref.update({"list": firestore.ArrayRemove([player_id])})
 
+    await get_active_players.cache.clear()
 
-def clear_active_players():
+
+async def clear_active_players():
     """
     Clear the active players list and reset configurations.
     """
     db.collection("matches_settings").document("pool").set({"list": []})
-    db.collection("matches_settings").document("config").set({"fixed_teams": False})
     db.collection("matches_settings").document("teams").set({"A": [], "B": []})
 
+    await set_config("fixed_teams", False)
 
-def get_active_players():
+    await get_active_players.cache.clear()
+
+
+@cached(ttl=7200)
+async def get_active_players():
     """
     Retrieve the list of active players or fixed teams if enabled.
     """
@@ -100,34 +126,29 @@ def get_active_players():
         player_list = db.collection("matches_settings").document("teams").get()
 
         teams_discord = {
-            "A": get_players_by_id(player_list.get("A")),
-            "B": get_players_by_id(player_list.get("B"))
+            "A": await get_players_by_id(player_list.get("A")),
+            "B": await get_players_by_id(player_list.get("B"))
         }
         return teams_discord
     else:
         player_list = db.collection("matches_settings").document("pool").get().get("list")
-        return get_players_by_id(player_list)
+        return await get_players_by_id(player_list) if player_list else []
 
 
 # Fixed Teams Management
-def add_fixed_players(players, team):
+async def add_fixed_players(players, team):
     """
     Add players to a fixed team.
     """
     players_ref = db.collection("matches_settings").document("teams")
-    firebase_players = [p.id for p in get_players_by_discord_id([player.id for player in players])]
+    firebase_players = [p.id for p in await get_players_by_discord_id([player.id for player in players])]
     players_ref.update({team: firebase_players})
 
-
-def set_fixed_team(players, team_name):
-    """
-    Set the roster of a fixed team.
-    """
-    db.collection("matches_settings").document("teams").set({team_name: players})
+    await get_active_players.cache.clear()
 
 
 # Match Management
-def store_match(match):
+async def store_match(match):
     """
     Store a match in the database.
     """
@@ -138,17 +159,24 @@ def store_match(match):
     match["blue_team"]["players"] = [player.id for player in match["blue_team"]["players"]]
     match["red_team"]["players"] = [player.id for player in match["red_team"]["players"]]
     result = db.collection("matches").add(match)
+
+    await get_finished_matches.cache.clear()
+    await get_matches_by_player.cache.clear()
     return result[1].id
 
 
-def set_match_victory(match_id, result):
+async def set_match_victory(match_id, result):
     """
     Set the result of a match.
     """
     db.collection("matches").document(match_id).update({"result": result})
 
+    await get_finished_matches.cache.clear()
+    await get_matches_by_player.cache.clear()
 
-def get_finished_matches(mode):
+
+@cached(ttl=7200)
+async def get_finished_matches(mode):
     """
     Retrieve all finished matches with optional filtering by mode.
     """
@@ -158,15 +186,41 @@ def get_finished_matches(mode):
     return query.stream()
 
 
+@cached(ttl=7200)
+async def get_matches_by_player(player_id, limit):
+    """
+    Retrieve the last N matches of the specified player.
+    """
+    query = (
+        db.collection("matches")
+        .where(filter=FieldFilter("result", "!=", "UNFINISHED"))
+        .where(
+            filter=Or(
+                [
+                    FieldFilter("blue_team.players", "array_contains", player_id),
+                    FieldFilter("red_team.players", "array_contains", player_id),
+                ]
+            )
+        )
+        .order_by("timestamp", direction=firestore.Query.DESCENDING)
+        .limit(limit)
+    )
+
+    return query.stream()
+
+
 # Configuration Management
-def set_config(config, value):
+async def set_config(config, value):
     """
     Set a configuration in the database.
     """
     db.collection("matches_settings").document("config").set({config: value})
 
+    await get_config.cache.clear()
 
-def get_config(config):
+
+@cached(ttl=7200)
+async def get_config(config):
     """
     Get a specific configuration value.
     """

@@ -1,7 +1,9 @@
 import logging
-import src.repos.firebase_repo as repo
+import repos.firebase_repo as repo
 
-from discord import Bot, Option, OptionChoice, ApplicationContext, Embed
+from discord import Bot, Option, OptionChoice, ApplicationContext, Embed, User
+
+from utils.embed import create_match_history_embed
 
 logging.basicConfig(format='%(levelname)s %(name)s %(asctime)s: %(message)s', level=logging.INFO)
 logger = logging.getLogger("c/stats")
@@ -15,8 +17,8 @@ def register_stats_commands(bot: Bot):
                          choices=[OptionChoice("Todos", value=0), OptionChoice("5X5", value=5),
                                   OptionChoice("4X4", value=4), OptionChoice("3X3", value=3)])):
         await ctx.response.defer()
-        players = repo.get_players()
-        matches = repo.get_finished_matches(mode)
+        players = await repo.get_players()
+        matches = await repo.get_finished_matches(mode)
 
         stats = {player.id: {"id": player.get("discord_id"), "wins": 0} for player in players}
 
@@ -48,8 +50,8 @@ def register_stats_commands(bot: Bot):
                                   OptionChoice("4X4", value=4), OptionChoice("3X3", value=3)]),
             minimal: Option(int, "Quantidade minima de jogos", name="corte", default=10, min_value=1, max_value=30)):
         await ctx.response.defer()
-        players = repo.get_players()
-        matches = repo.get_finished_matches(mode)
+        players = await repo.get_players()
+        matches = await repo.get_finished_matches(mode)
 
         stats = {player.id: {"id": player.get("discord_id"), "wins": 0, "losses": 0} for player in players}
 
@@ -81,5 +83,20 @@ def register_stats_commands(bot: Bot):
             title=f"Rankzudo {'Geral' if not mode else f'{mode}X{mode}'} - Mínimo de {minimal} jogos",
             description="\n".join(result_strings)
         )
+
+        await ctx.followup.send(embed=embed)
+
+    @bot.slash_command(name="historico", description="Exibe o historico de partidas de um jogador")
+    async def match_history(
+            ctx: ApplicationContext,
+            user: Option(User, "Usuário a ser consultado", name="usuário", required=False),
+            limit: Option(int, "Limite de partidas", name="limite", default=10, min_value=1, max_value=50)
+    ):
+        await ctx.response.defer(ephemeral=True)
+        player = await repo.get_player_by_discord_id(user.id if user else ctx.author.id)
+
+        matches = await repo.get_matches_by_player(player.id, limit)
+
+        embed = create_match_history_embed(matches, player)
 
         await ctx.followup.send(embed=embed)
