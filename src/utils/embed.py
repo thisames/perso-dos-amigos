@@ -29,13 +29,19 @@ def create_image_from_champions(champions_list: list[str], data: ImageDict) -> i
     return image_buffer
 
 
-def create_champion_embed(champions_list: list[str], data: ImageDict, colour: discord.Colour) -> dict:
-    champion_string = "\n".join([data[champ]["name"] for champ in champions_list])
+def create_champion_embed(champions_list: list[str], data: ImageDict, colour: discord.Colour, team: int) -> dict:
+
+    if team == 1:
+        embed_description = "Você está no time Azul/1, localizado no lado esquerdo da personalizada.\n"
+    else:
+        embed_description = "Você está no time Vermelho/2, localizado no lado direito da personalizada.\n"
+
+    embed_description += "\n".join([data[champ]["name"] for champ in champions_list])
 
     image_buffer = create_image_from_champions(champions_list, data)
     embed = discord.Embed(
         title="Só os bonecudos",
-        description=champion_string,
+        description=embed_description,
         color=colour,
     )
     embed.set_image(url="attachment://image.png")

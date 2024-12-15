@@ -1,6 +1,5 @@
 import discord
 import logging
-import asyncio
 import repos.firebase_repo as repo
 
 from discord import Bot, Option, OptionChoice
@@ -53,13 +52,13 @@ def register_match_commands(bot: Bot):
     async def send_embed(player_info, embed):
         player_discord = await bot.fetch_user(player_info.get("discord_id"))
 
-        embed["file"].seek(0)
-        file = discord.File(fp=embed["file"], filename="image.png")
-
         try:
+            embed["file"].seek(0)
+            file = discord.File(fp=embed["file"], filename="image.png")
+
             await player_discord.send(file=file, embed=embed["embed"])
-        except discord.Forbidden:
-            logger.warning(f"Failed to send message to user {player_discord.name}")
+        except Exception as e:
+            logger.warning(f"Failed to send message to user {player_discord.name}, cause: {e}")
 
     @bot.slash_command(name="sortear", description="Sortea os times e campeões")
     async def sort_active_players(ctx, choices_number: Option(int, "Quantidade de campeões", name="opções", default=0,
@@ -69,22 +68,18 @@ def register_match_commands(bot: Bot):
         result = generate_team(players, list(data), await repo.get_config("fixed_teams"), choices_number)
         match_id = await repo.store_match(result)
 
-        blue_embed = create_champion_embed(result.get("blue_team").get("champions"), data, discord.Colour.blue())
-        red_embed = create_champion_embed(result.get("red_team").get("champions"), data, discord.Colour.red())
+        blue_embed = create_champion_embed(result.get("blue_team").get("champions"), data, discord.Colour.blue(), 1)
+        red_embed = create_champion_embed(result.get("red_team").get("champions"), data, discord.Colour.red(), 2)
 
         blue_team_players = ""
-        blue_tasks = []
         for idx, player in enumerate(result.get("blue_team").get("players")):
             blue_team_players += f"{idx + 1} - <@{player.get('discord_id')}>\n"
-            blue_tasks.append(send_embed(player, blue_embed))
+            await send_embed(player, blue_embed)
 
         red_team_players = ""
-        red_tasks = []
         for idx, player in enumerate(result.get("red_team").get("players")):
             red_team_players += f"{idx + 1} - <@{player.get('discord_id')}>\n"
-            red_tasks.append(send_embed(player, red_embed))
-
-        await asyncio.gather(*blue_tasks, *red_tasks)
+            await send_embed(player, red_embed)
 
         embed = discord.Embed(
             title="Partidazuda",
