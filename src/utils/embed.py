@@ -30,11 +30,10 @@ def create_image_from_champions(champions_list: list[str], data: ImageDict) -> i
 
 
 def create_champion_embed(champions_list: list[str], data: ImageDict, colour: discord.Colour, team: int) -> dict:
-
     if team == 1:
-        embed_description = "Você está no time Azul/1, localizado no lado esquerdo da personalizada.\n"
+        embed_description = "Você está no time Azul/1, localizado no lado esquerdo da personalizada.\n\n"
     else:
-        embed_description = "Você está no time Vermelho/2, localizado no lado direito da personalizada.\n"
+        embed_description = "Você está no time Vermelho/2, localizado no lado direito da personalizada.\n\n"
 
     embed_description += "\n".join([data[champ]["name"] for champ in champions_list])
 

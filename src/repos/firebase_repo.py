@@ -175,12 +175,18 @@ async def set_match_victory(match_id, result):
     await get_matches_by_player.cache.clear()
 
 
-@cached(ttl=7200, key_builder=lambda f, *args, **kwargs: f"{f.__name__}:{args[0]}")
-async def get_finished_matches(mode):
+@cached(ttl=7200, key_builder=lambda f, *args, **kwargs: f"{f.__name__}:{args[0]}:{args[1]}")
+async def get_finished_matches(mode, season):
     """
     Retrieve all finished matches with optional filtering by mode.
     """
-    query = db.collection("matches").where(filter=FieldFilter("result", "!=", 'UNFINISHED'))
+    query = (
+        db
+        .collection("matches")
+        .where(filter=FieldFilter("result", "!=", 'UNFINISHED'))
+        .where(filter=FieldFilter("timestamp", ">=", season.get("start")))
+        .where(filter=FieldFilter("timestamp", "<=", season.get("end")))
+    )
     if mode:
         query = query.where(filter=FieldFilter("mode", "==", mode))
     return list(query.stream())
@@ -225,3 +231,55 @@ async def get_config(config):
     Get a specific configuration value.
     """
     return db.collection("matches_settings").document("config").get().get(config)
+
+
+# Season Management
+@cached(ttl=7200)
+async def get_last_season():
+    """
+    Get last season.
+    """
+    query = (
+        db.collection("seasons")
+        .order_by("id", direction=firestore.Query.DESCENDING)
+        .limit(1)
+    )
+
+    return list(query.stream())[0]
+
+
+@cached(ttl=7200, key_builder=lambda f, *args, **kwargs: f"{f.__name__}:{args[0]}")
+async def get_season_by_id(season_id: int):
+    """
+    Get season by the specified id.
+    """
+    query = (
+        db.collection("seasons")
+        .where(filter=FieldFilter("id", "==", season_id))
+        .limit(1)
+    )
+
+    result = list(query.stream())
+
+    return result[0] if result else None
+
+
+async def create_new_season():
+    """
+    Create a new season.
+    """
+    last_season = await get_last_season()
+    new_season = {
+        "id": last_season.get("id") + 1,
+        "start": firestore.SERVER_TIMESTAMP,
+        "end": last_season.get("end")
+    }
+
+    db.collection("seasons").document(last_season.id).update({"end": firestore.SERVER_TIMESTAMP})
+    result = db.collection("seasons").add(new_season)
+
+    await get_last_season.cache.clear()
+    await get_season_by_id.cache.clear()
+
+    return result[1].get()
+
