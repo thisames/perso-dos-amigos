@@ -3,20 +3,24 @@ from datetime import datetime
 
 import discord
 
-from PIL import Image
+from PIL import Image, ImageDraw
 from repos.champions_repo import ImageDict
 
 
 def create_image_from_champions(champions_list: list[str], data: ImageDict) -> io.BytesIO:
     max_width, max_height = 680, 281
     new_im = Image.new('RGBA', (max_width, max_height), (255, 0, 0, 0))
+    new_im_draw = ImageDraw.Draw(new_im)
 
     x_offset = 10
     y_offset = 10
-    for champion in champions_list:
+    for idx, champion in enumerate(champions_list):
         champion_data = data[champion]
         img = Image.open(io.BytesIO(champion_data["image"]))
         new_im.paste(img, (x_offset, y_offset))
+
+        new_im_draw.text((x_offset + 5, y_offset), str(idx + 1),
+                         font_size=30, fill="white", stroke_width=2, stroke_fill="black")
 
         x_offset += 133
         if x_offset >= max_width - 10:
@@ -31,11 +35,13 @@ def create_image_from_champions(champions_list: list[str], data: ImageDict) -> i
 
 def create_champion_embed(champions_list: list[str], data: ImageDict, colour: discord.Colour, team: int) -> dict:
     if team == 1:
-        embed_description = "Você está no time Azul/1, localizado no lado esquerdo da personalizada.\n\n"
+        embed_description = ("Você está no time Azul :blue_circle:, localizado no lado esquerdo :arrow_left: da "
+                             "personalizada. <a:calabreso:1320528277873365012>\n\n```yaml\n")
     else:
-        embed_description = "Você está no time Vermelho/2, localizado no lado direito da personalizada.\n\n"
+        embed_description = ("Você está no time Vermelho :red_circle:, localizado no lado direito :arrow_right: da "
+                             "personalizada. <a:calabreso:1320528277873365012>\n\n```haskell\n")
 
-    embed_description += "\n".join([data[champ]["name"] for champ in champions_list])
+    embed_description += "\n".join([data[champ]["name"] for champ in champions_list]) + "\n```"
 
     image_buffer = create_image_from_champions(champions_list, data)
     embed = discord.Embed(

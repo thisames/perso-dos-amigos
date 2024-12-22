@@ -25,8 +25,8 @@ async def set_player(name, user):
     players_ref = db.collection("players")
     players_ref.add({"nome": name, "discord_id": user.id})
 
-    get_players.cache_clear()
-    get_player_by_id.cache_clear()
+    get_players.cache.clear()
+    get_player_by_id.cache.clear()
     get_player_by_discord_id.cache.clear()
 
 
@@ -84,7 +84,7 @@ async def add_active_players(players):
     Add players to the active pool.
     """
     players_ref = db.collection("matches_settings").document("pool")
-    firebase_players = [p.id for p in await get_players_by_discord_id([player.id for player in players])]
+    firebase_players = [p.id for p in await get_players_by_discord_id(players)]
 
     if players_ref.get().exists:
         players_ref.update({"list": firestore.ArrayUnion(firebase_players)})

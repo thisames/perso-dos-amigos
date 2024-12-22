@@ -31,6 +31,25 @@ def register_match_commands(bot: Bot):
 
             await ctx.followup.send("Monta o time!", view=TeamSelectView())
 
+    @bot.slash_command(
+        name="canal",
+        description="Adiciona os jogadores que estão em um determinado canal a lista de ativos"
+    )
+    async def add_channel_active_players(
+            ctx: discord.ApplicationContext
+    ):
+        await ctx.response.defer(ephemeral=True)
+        member = ctx.guild.get_member(ctx.user.id)
+        voice = member.voice
+
+        if not voice:
+            await ctx.followup.send("É necessário estar conectado a um canal de voz para executar esse comando!")
+            return
+
+        await repo.add_active_players(list(voice.channel.voice_states))
+
+        await ctx.followup.send(f"Os jogadores do canal {voice.channel.name} foram adicionados a lista de ativos!")
+
     @bot.slash_command(name="limpar", description="Apaga todos os jogadores da lista de ativos")
     async def clear_active_players(ctx):
         await ctx.response.defer(ephemeral=True)

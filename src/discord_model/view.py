@@ -10,7 +10,7 @@ class TeamSelect(discord.ui.Select):
     """
 
     async def callback(self, interaction: discord.Interaction):
-        await repo.add_active_players(self.values)
+        await repo.add_active_players([user.id for user in self.values])
 
         await interaction.response.send_message(
             content="Os jogadores foram adicionados à lista de ativos.",
