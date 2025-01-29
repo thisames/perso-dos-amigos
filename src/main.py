@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from commands.match import register_match_commands
 from commands.stats import register_stats_commands
 from commands.config import register_config_commands
-
+from commands.music import register_music_commands
 
 logging.basicConfig(format='%(levelname)s %(name)s %(asctime)s: %(message)s', level=logging.INFO)
 logger = logging.getLogger("main")
@@ -16,6 +16,7 @@ bot = discord.Bot()
 register_stats_commands(bot)
 register_match_commands(bot)
 register_config_commands(bot)
+register_music_commands(bot)
 
 
 @bot.event

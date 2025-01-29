@@ -1,8 +1,7 @@
 import io
-from datetime import datetime
-
 import discord
 
+from datetime import datetime
 from PIL import Image, ImageDraw
 from repos.champions_repo import ImageDict
 

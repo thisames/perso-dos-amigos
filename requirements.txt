@@ -1,6 +1,9 @@
 py-cord
 firebase-admin
 aiocache
+yt-dlp
+async-timeout
+pynacl
 python-dotenv~=1.0.1
 requests~=2.32.0
 pillow~=11.0.0
