@@ -4,13 +4,12 @@ import functools
 import asyncio
 import math
 import random
-
 import yt_dlp
-import repos.firebase_repo as repo
+
 from discord import Bot, ApplicationContext, PCMVolumeTransformer, FFmpegPCMAudio, Embed, Color, Cog, commands, \
-    ApplicationCommandError, User, TextChannel
+    ApplicationCommandError, User, TextChannel, Option, OptionChoice
 from async_timeout import timeout
-from discord.ext.commands import NoPrivateMessage
+from discord.ext.commands import NoPrivateMessage, CommandError
 
 logging.basicConfig(format='%(levelname)s %(name)s %(asctime)s: %(message)s', level=logging.INFO)
 logger = logging.getLogger("c/config")
@@ -20,10 +19,7 @@ yt_dlp.utils.bug_reports_message = lambda: ''
 
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
-    'extractaudio': True,
-    'audioformat': 'mp3',
     'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
-    'restrictfilenames': True,
     'noplaylist': True,
     'nocheckcertificate': True,
     'ignoreerrors': False,
@@ -48,22 +44,6 @@ class YTDLError(Exception):
     pass
 
 
-async def search_song(search: str, loop: asyncio.AbstractEventLoop = None):
-    loop = loop or asyncio.get_event_loop()
-
-    with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ytdl:
-        if search[0:4] != "http" and search[0:3] != "www":
-            search = f"ytsearch:{search}"
-
-        partial = functools.partial(ytdl.extract_info, search, download=False, process=False)
-        data = await loop.run_in_executor(None, partial)
-
-        if data is None or "entries" not in data:
-            raise YTDLError("Não foi possivel achar nenhum resultado.")
-
-        return data["entries"]
-
-
 def parse_duration(duration: int):
     minutes, seconds = divmod(duration, 60)
     hours, minutes = divmod(minutes, 60)
@@ -82,21 +62,41 @@ def parse_duration(duration: int):
     return ', '.join(duration)
 
 
-async def create_source(url: str, volume: float, *, loop: asyncio.AbstractEventLoop = None):
+async def search_song(search: str, loop: asyncio.AbstractEventLoop = None):
+    loop = loop or asyncio.get_event_loop()
+
+    with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ytdl:
+        if "playlist?list=" not in search or (search[0:4] != "http" and search[0:3] != "www"):
+            search = f"ytsearch:{search}"
+
+        partial = functools.partial(ytdl.extract_info, search, download=False, process=False)
+        data = await loop.run_in_executor(None, partial)
+
+        if data is None:
+            raise YTDLError("Não foi possivel achar nenhum resultado.")
+
+        if "entries" not in data:
+            return [data]
+
+        return data["entries"]
+
+
+async def create_source(url: str, *, loop: asyncio.AbstractEventLoop = None):
     loop = loop or asyncio.get_event_loop()
 
     with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ytdl:
 
         partial = functools.partial(ytdl.extract_info, url, download=False)
-        data = await loop.run_in_executor(None, partial)
+        data = await asyncio.to_thread(partial)
 
-        return PCMVolumeTransformer(FFmpegPCMAudio(data['url'], **FFMPEG_OPTIONS), volume=volume)
+        return PCMVolumeTransformer(FFmpegPCMAudio(data['url'], **FFMPEG_OPTIONS), volume=0.5)
 
 
 class Song:
-    __slots__ = ('requester', 'channel', 'title', 'thumbnail', 'duration', 'url')
+    __slots__ = ('requester', 'channel', 'title', 'thumbnail', 'duration', 'url', 'source')
 
     def __init__(self, song: dict, requester: User, channel: TextChannel):
+        self.source = None
         self.requester = requester
         self.channel = channel
 
@@ -117,7 +117,11 @@ class Song:
         return embed
 
     def create_embed_play(self):
-        return Embed(description=f"Tocando **{self.title}**")
+        return Embed(description="Tocando **[{0.title}]({0.url})**".format(self))
+
+    async def prep(self, loop):
+        if not self.source:
+            self.source = await create_source(url=self.url, loop=loop)
 
 
 class SongQueue(asyncio.Queue):
@@ -141,6 +145,41 @@ class SongQueue(asyncio.Queue):
 
     def remove(self, index: int):
         del self._queue[index]
+
+    async def insert(self, itens, priority):
+        while self.full():
+            putter = self._get_loop().create_future()
+            self._putters.append(putter)
+            try:
+                await putter
+            except:
+                putter.cancel()  # Just in case putter is not done yet.
+                try:
+                    # Clean self._putters from canceled putters.
+                    self._putters.remove(putter)
+                except ValueError:
+                    # The putter could be removed from self._putters by a
+                    # previous get_nowait call.
+                    pass
+                if not self.full() and not putter.cancelled():
+                    # We were woken up by get_nowait(), but can't take
+                    # the call.  Wake up the next in line.
+                    self._wakeup_next(self._putters)
+                raise
+
+        if priority:
+            self._queue.extendleft(reversed(itens))
+        else:
+            self._queue.extend(itens)
+
+        self._unfinished_tasks += 1
+        self._finished.clear()
+        self._wakeup_next(self._getters)
+
+    def peek(self):
+        if self.empty():
+            return None
+        return self._queue[0]
 
 
 class VoiceState:
@@ -199,8 +238,13 @@ class VoiceState:
                     return
 
             await self.current.channel.send(embed=self.current.create_embed_play())
-            source = await create_source(url=self.current.url, volume=self._volume, loop=self.bot.loop)
-            self.voice.play(source, after=self.play_next_song)
+            await self.current.prep(self.bot.loop)
+            self.current.source.volume = self._volume
+            self.voice.play(self.current.source, after=self.play_next_song)
+
+            next_song = self.songs.peek()
+            if next_song:
+                await next_song.prep(self.bot.loop)
 
             await self.next.wait()
 
@@ -249,6 +293,9 @@ class Music(Cog):
 
     async def cog_before_invoke(self, ctx: ApplicationContext):
         ctx.voice_state = self.get_voice_state(ctx)
+
+    async def cog_command_error(self, ctx: ApplicationContext, error: CommandError):
+        await ctx.respond(str(error))
 
     @commands.slash_command(name='join', invoke_without_subcommand=True, description="O bot se junta ao seu canal")
     async def join(self, ctx: ApplicationContext):
@@ -331,7 +378,7 @@ class Music(Cog):
 
         embed = (Embed(description='**{} tracks:**\n\n{}'.format(len(ctx.voice_state.songs), queue))
                  .set_footer(text='Exibindo página {}/{}'.format(page, pages)))
-        await ctx.send(embed=embed)
+        await ctx.respond(embed=embed)
 
     @commands.slash_command(name='shuffle', description="Embaralha a fila")
     async def shuffle(self, ctx: ApplicationContext):
@@ -344,39 +391,59 @@ class Music(Cog):
     @commands.slash_command(name='loop', description="Coloca o bot no modo loop")
     async def loop(self, ctx: ApplicationContext):
         if not ctx.voice_state.is_playing:
-            return await ctx.send('Nenhuma música tocando no momento.')
+            return await ctx.respond('Nenhuma música tocando no momento.')
 
         # Inverse boolean value to loop and unloop.
         ctx.voice_state.loop = not ctx.voice_state.loop
-        await ctx.respond('🔁')
+        await ctx.respond("🔁")
 
     @commands.slash_command(name='play', description="Adiciona uma música/playlist a fila")
-    async def play(self, ctx: ApplicationContext, *, search: str):
+    async def play(
+            self,
+            ctx: ApplicationContext,
+            search: str,
+            priority: Option(int, "A musica será colocada no inicio da fila", name="prioridade", default=False,
+                             choices=[OptionChoice("Sim", value=True), OptionChoice("Não", value=False)]
+                             )):
         await ctx.defer()
         if not ctx.voice_state.voice:
             await ctx.invoke(self.join)
 
         sources = await search_song(search, self.bot.loop)
 
+        songs = []
+
         for source in sources:
+            if source["duration"] >= 7200:
+                await ctx.send(embed=Embed(
+                    description=f"A música **{source['title']}** excedeu o limite de duas horas e não será enfileirada."))
+                continue
+
             song = Song(source, ctx.author, ctx.channel)
-            await ctx.voice_state.songs.put(song)
+            songs.append(song)
 
-        if len(sources) != 1:
-            await ctx.followup.send(embed=Embed(description=f"{len(sources)} músicas adicionadas."))
+        await ctx.voice_state.songs.insert(songs, priority)
+
+        if len(songs) == 0:
+            await ctx.followup.send("Nenhuma música adicionada.")
+        elif len(songs) != 1:
+            await ctx.followup.send(embed=Embed(description=f"{len(songs)} músicas adicionadas."))
         else:
-            await ctx.followup.send(embed=song.create_embed())
+            await ctx.followup.send(embed=songs[0].create_embed())
 
+        next_song = ctx.voice_state.songs.peek()
+        if next_song:
+            await next_song.prep(self.bot.loop)
 
     @join.before_invoke
     @play.before_invoke
     async def ensure_voice_state(self, ctx: ApplicationContext):
         if not ctx.author.voice or not ctx.author.voice.channel:
-            raise ApplicationCommandError('É necessário estar conectado em um canal para usar esse comando.')
+            raise ApplicationCommandError("É necessário estar conectado em um canal para usar esse comando.")
 
         if ctx.voice_client:
             if ctx.voice_client.channel != ctx.author.voice.channel:
-                raise ApplicationCommandError('O bot já está conectado a um canal.')
+                raise ApplicationCommandError("O bot já está conectado a um canal.")
 
 
 def register_music_commands(bot: Bot):
