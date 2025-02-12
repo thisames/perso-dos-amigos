@@ -1,9 +1,8 @@
-py-cord
 firebase-admin
-aiocache
-yt-dlp
-async-timeout
+aiocache~=0.12.3
+py-cord~=2.6.0
 pynacl
 python-dotenv~=1.0.1
 requests~=2.32.0
 pillow~=11.0.0
+wavelink

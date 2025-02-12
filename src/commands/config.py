@@ -1,7 +1,8 @@
 import logging
 import repos.firebase_repo as repo
 
-from discord import Bot, ApplicationContext
+from discord.bot import Bot
+from discord.commands import ApplicationContext
 
 logging.basicConfig(format='%(levelname)s %(name)s %(asctime)s: %(message)s', level=logging.INFO)
 logger = logging.getLogger("c/config")

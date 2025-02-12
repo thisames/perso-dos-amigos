@@ -2,7 +2,8 @@ import discord
 import logging
 import repos.firebase_repo as repo
 
-from discord import Bot, Option, OptionChoice
+from discord.bot import Bot
+from discord.commands import Option, OptionChoice
 from discord_model.view import TeamSelectView, DeleteButtons, ResultButtons
 from repos.champions_repo import ImageDict
 from team_generator.generator import generate_team

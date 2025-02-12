@@ -1,7 +1,10 @@
-import discord
+import asyncio
 import os
 import logging
+import wavelink
 
+from discord import Activity, ActivityType
+from discord.bot import Bot
 from dotenv import load_dotenv
 from commands.match import register_match_commands
 from commands.stats import register_stats_commands
@@ -12,23 +15,42 @@ logging.basicConfig(format='%(levelname)s %(name)s %(asctime)s: %(message)s', le
 logger = logging.getLogger("main")
 
 load_dotenv()
-bot = discord.Bot()
+bot = Bot()
 register_stats_commands(bot)
 register_match_commands(bot)
 register_config_commands(bot)
 register_music_commands(bot)
 
 
+async def connect_nodes():
+    await bot.wait_until_ready()
+
+    LAVALINK_URL = os.getenv("LAVALINK_URL")
+    LAVALINK_PORT = os.getenv("LAVALINK_PORT")
+    LAVALINK_PASSWORD = os.getenv("LAVALINK_PASSWORD")
+
+    nodes = [
+        wavelink.Node(
+            identifier="Node",
+            uri=f"http://{LAVALINK_URL}:{LAVALINK_PORT}",
+            password=LAVALINK_PASSWORD
+        )
+    ]
+
+    await wavelink.Pool.connect(nodes=nodes, client=bot)
+
+
 @bot.event
 async def on_ready():
     logger.info(f"{bot.user} tá on pai!")
     await bot.change_presence(
-        activity=discord.Activity(
-            type=discord.ActivityType.custom,
+        activity=Activity(
+            type=ActivityType.custom,
             name="custom",
             state="Fraudando as runas...."
         )
     )
+    await connect_nodes()
 
 
 def main():
@@ -40,4 +62,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

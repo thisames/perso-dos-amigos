@@ -1,7 +1,9 @@
 import logging
 import repos.firebase_repo as repo
 
-from discord import Bot, Option, OptionChoice, ApplicationContext, Embed, User
+from discord import Embed, User
+from discord.bot import Bot
+from discord.commands import ApplicationContext, Option, OptionChoice
 from utils.embed import create_match_history_embed
 
 logging.basicConfig(format='%(levelname)s %(name)s %(asctime)s: %(message)s', level=logging.INFO)
