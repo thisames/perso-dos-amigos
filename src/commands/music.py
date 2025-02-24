@@ -40,23 +40,18 @@ class Music(Cog):
         self.bot = bot
 
     @Cog.listener()
-    async def on_wavelink_node_ready(self, payload: wavelink.NodeReadyEventPayload):
-        payload.node.inactive_channel_tokens = 1
-        payload.node.inactive_timeout = 60
-
-    @Cog.listener()
     async def on_wavelink_track_start(self, payload: wavelink.TrackStartEventPayload):
         player: wavelink.Player | None = payload.player
         if not player:
             # Handle edge cases...
             return
 
-        track: wavelink.Playable = payload.track
+        track: wavelink.Playable = payload.original
 
         embed: Embed = Embed(title="Tocando agora", color=Color.random())
         embed.description = f"```\n{track.title}\n```"
 
-        embed.add_field(name='Autor', value=track.author)
+        embed.add_field(name='Solicitado por', value=track.requester.mention)
         embed.add_field(name='Duração', value=parse_duration(track.length))
         embed.add_field(name='URL', value=f'[Click]({track.uri})')
 
@@ -68,6 +63,7 @@ class Music(Cog):
     @Cog.listener()
     async def on_wavelink_inactive_player(self, player: wavelink.Player):
         await player.home.send(embed=Embed(description="O bot está inativo. Desconectando", color=Color.red()))
+        player.cleanup()
         await player.disconnect()
 
     @commands.slash_command(name="play")
@@ -77,7 +73,6 @@ class Music(Cog):
             search: str,
             priority: Option(int, "A musica será colocada no inicio da fila", default=False,
                              choices=[OptionChoice("Sim", value=True), OptionChoice("Não", value=False)])):
-
         await ctx.defer()
         if not ctx.guild:
             return
@@ -120,6 +115,9 @@ class Music(Cog):
 
         embed = Embed(color=Color.blurple())
 
+        for track in tracks:
+            track.requester = ctx.author
+
         if isinstance(tracks, wavelink.Playlist):
             if priority:
                 added: int = 0
@@ -149,21 +147,60 @@ class Music(Cog):
         if not player.playing:
             await player.play(player.queue.get(), volume=30)
 
+    @commands.slash_command(name="remove", description="Remove a ultima música da fila")
+    async def remove(self, ctx: ApplicationContext):
+        player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
+        if not player:
+            await ctx.respond("O bot não está conectado.")
+            return
+
+        try:
+            player.queue.delete(player.queue.count - 1)
+            await ctx.respond("Música removida da fila.")
+        except IndexError:
+            await ctx.respond("Falha ao remover música da fila.")
+
+    @commands.slash_command(name="clear", description="Remove todas as músicas da fila")
+    async def clear(
+            self,
+            ctx: ApplicationContext):
+        player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
+        if not player:
+            await ctx.respond("O bot não está conectado.")
+            return
+
+        player.queue.reset()
+        await ctx.respond("Fila limpa.")
+
+    @commands.slash_command(name="volume", description="Ajusta o volume do bot")
+    async def volume(
+            self,
+            ctx: ApplicationContext,
+            volume: Option(int, min_value=0, max_value=200)
+    ):
+        player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
+        if not player:
+            await ctx.respond("O bot não está conectado.")
+            return
+
+        await player.set_volume(volume)
+        await ctx.respond(f"Volume definido para {volume}%.")
+
     @commands.slash_command(name='skip', description="Pula a música")
     async def skip(self, ctx: ApplicationContext):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            ctx.respond("O bot não está conectado.")
+            await ctx.respond("O bot não está conectado.")
             return
 
         await player.skip(force=True)
         await ctx.respond("⏭")
 
-    @commands.slash_command(name="toggle", aliases=["pause", "resume"])
-    async def pause_resume(self, ctx: ApplicationContext):
+    @commands.slash_command(name="pause", aliases=["pause", "resume"])
+    async def pause(self, ctx: ApplicationContext):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            ctx.respond("O bot não está conectado.")
+            await ctx.respond("O bot não está conectado.")
             return
 
         await player.pause(not player.paused)
@@ -173,7 +210,7 @@ class Music(Cog):
     async def leave(self, ctx: ApplicationContext):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            ctx.respond("O bot não está conectado.")
+            await ctx.respond("O bot não está conectado.")
             return
 
         await player.disconnect()
@@ -183,7 +220,7 @@ class Music(Cog):
     async def shuffle(self, ctx: ApplicationContext):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            ctx.respond("O bot não está conectado.")
+            await ctx.respond("O bot não está conectado.")
             return
 
         player.queue.shuffle()
@@ -193,7 +230,7 @@ class Music(Cog):
     async def queue(self, ctx: ApplicationContext, *, page: int = 1):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            ctx.respond("O bot não está conectado.")
+            await ctx.respond("O bot não está conectado.")
             return
 
         items_per_page = 10

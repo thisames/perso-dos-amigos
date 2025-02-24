@@ -33,11 +33,13 @@ async def connect_nodes():
         wavelink.Node(
             identifier="Node",
             uri=f"http://{LAVALINK_URL}:{LAVALINK_PORT}",
-            password=LAVALINK_PASSWORD
+            password=LAVALINK_PASSWORD,
+            inactive_player_timeout=60,
+            inactive_channel_tokens=1
         )
     ]
 
-    await wavelink.Pool.connect(nodes=nodes, client=bot)
+    await wavelink.Pool.connect(nodes=nodes, client=bot, )
 
 
 @bot.event
