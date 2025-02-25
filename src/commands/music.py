@@ -62,7 +62,7 @@ class Music(Cog):
 
     @Cog.listener()
     async def on_wavelink_inactive_player(self, player: wavelink.Player):
-        await player.home.send(embed=Embed(description="O bot está inativo. Desconectando", color=Color.red()))
+        await player.home.send(embed=Embed(description="O bot está inativo. Desconectando... <a:exit:1343976292424618146> ", color=Color.red()))
         player.cleanup()
         await player.disconnect()
 
@@ -84,10 +84,10 @@ class Music(Cog):
             try:
                 player = await ctx.author.voice.channel.connect(cls=wavelink.Player)  # type: ignore
             except AttributeError:
-                await ctx.followup.send("Para utilizar esse comando, se conecte a um canal.")
+                await ctx.followup.send("Para utilizar esse comando, se conecte a um canal. <a:no:1343975451483181076>")
                 return
             except ClientException:
-                await ctx.followup.send("Não foi possivel se conectar ao canal. Tente novamente.")
+                await ctx.followup.send("Não foi possivel se conectar ao canal. Tente novamente. <a:hmm:1343977260767772744>")
                 return
 
         # Turn on AutoPlay to enabled mode.
@@ -101,7 +101,7 @@ class Music(Cog):
             player.home = ctx.channel
         elif player.home != ctx.channel:
             await ctx.followup.send(
-                f"O bot já está conectado ao canal {player.home.mention}.")
+                f"O bot já está conectado ao canal {player.home.mention}. <a:no:1343975451483181076> ")
             return
 
         # This will handle fetching Tracks and Playlists...
@@ -110,7 +110,7 @@ class Music(Cog):
         # Defaults to YouTube for non URL based queries...
         tracks: wavelink.Search = await wavelink.Playable.search(search)
         if not tracks:
-            await ctx.followup.send("Não foi possivel localizar nenhum resultado para essa busca.")
+            await ctx.followup.send("Não foi possivel localizar nenhum resultado para essa busca. <a:hmm:1343977260767772744>")
             return
 
         embed = Embed(color=Color.blurple())
@@ -127,7 +127,7 @@ class Music(Cog):
             else:
                 added: int = await player.queue.put_wait(tracks)
 
-            embed.title = 'Playlist enfileirada!'
+            embed.title = '<a:dj:1343976753080569906> Playlist enfileirada! <a:dj:1343976753080569906>'
             embed.description = f'**{tracks.name}** - {added} tracks'
 
             if tracks.artwork:
@@ -139,7 +139,7 @@ class Music(Cog):
             else:
                 await player.queue.put_wait(track)
 
-            embed.title = 'Música enfileirada!'
+            embed.title = '<a:dj:1343976753080569906> Música enfileirada! <a:dj:1343976753080569906>'
             embed.description = f'[{track}]({track.uri})'
 
         await ctx.followup.send(embed=embed)
@@ -151,7 +151,7 @@ class Music(Cog):
     async def remove(self, ctx: ApplicationContext):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            await ctx.respond("O bot não está conectado.")
+            await ctx.respond("O bot não está conectado. <a:no:1343975451483181076>")
             return
 
         try:
@@ -166,7 +166,7 @@ class Music(Cog):
             ctx: ApplicationContext):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            await ctx.respond("O bot não está conectado.")
+            await ctx.respond("O bot não está conectado. <a:no:1343975451483181076>")
             return
 
         player.queue.reset()
@@ -180,7 +180,7 @@ class Music(Cog):
     ):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            await ctx.respond("O bot não está conectado.")
+            await ctx.respond("O bot não está conectado. <a:no:1343975451483181076>")
             return
 
         await player.set_volume(volume)
@@ -190,47 +190,48 @@ class Music(Cog):
     async def skip(self, ctx: ApplicationContext):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            await ctx.respond("O bot não está conectado.")
+            await ctx.respond("O bot não está conectado. <a:no:1343975451483181076>")
             return
 
         await player.skip(force=True)
-        await ctx.respond("⏭")
+        await ctx.respond("<a:fazol:1343975050138746890>")
 
     @commands.slash_command(name="pause", aliases=["pause", "resume"])
     async def pause(self, ctx: ApplicationContext):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            await ctx.respond("O bot não está conectado.")
+            await ctx.respond("O bot não está conectado. <a:no:1343975451483181076>")
             return
 
         await player.pause(not player.paused)
-        await ctx.respond("⏯️")
+        await ctx.respond("<a:pause:1343974955536224266>" if player.paused else "<a:play:1343974896669032511>")
 
     @commands.slash_command(name="leave")
     async def leave(self, ctx: ApplicationContext):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            await ctx.respond("O bot não está conectado.")
+            await ctx.respond("O bot não está conectado. <a:no:1343975451483181076>")
             return
 
+        player.cleanup()
         await player.disconnect()
-        await ctx.respond("Bot desconectado.")
+        await ctx.respond("Bot desconectado. <a:exit:1343976292424618146>")
 
     @commands.slash_command(name="shuffle")
     async def shuffle(self, ctx: ApplicationContext):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            await ctx.respond("O bot não está conectado.")
+            await ctx.respond("O bot não está conectado. <a:no:1343975451483181076>")
             return
 
         player.queue.shuffle()
-        await ctx.respond("🔀")
+        await ctx.respond("<a:shuffle:1343972431324385363>")
 
     @commands.slash_command(name='queue')
     async def queue(self, ctx: ApplicationContext, *, page: int = 1):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            await ctx.respond("O bot não está conectado.")
+            await ctx.respond("O bot não está conectado. <a:no:1343975451483181076>")
             return
 
         items_per_page = 10
