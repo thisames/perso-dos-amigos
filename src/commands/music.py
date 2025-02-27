@@ -1,5 +1,7 @@
+import colorsys
 import logging
 import math
+import random
 import re
 import typing
 import wavelink
@@ -48,12 +50,20 @@ class Music(Cog):
 
         track: wavelink.Playable = payload.original
 
-        embed: Embed = Embed(title="Tocando agora", color=Color.random())
-        embed.description = f"```\n{track.title}\n```"
+        colour = colorsys.hls_to_rgb(
+            random.randint(20, 241)/360,
+            0.7 + 0.2 * (random.randint(0, 100) / 100),
+            0.3 + 0.4 * (random.randint(0, 100)/100)
+        )
+
+        embed: Embed = Embed(
+            title=f"{track.title}{' - ' + track.author if track.author else ''}",
+            color=Color.from_rgb(int(colour[0] * 255), int(colour[1] * 255), int(colour[2] * 255)),
+            url=track.uri
+        )
 
         embed.add_field(name='Solicitado por', value=track.requester.mention)
         embed.add_field(name='Duração', value=parse_duration(track.length))
-        embed.add_field(name='URL', value=f'[Click]({track.uri})')
 
         if track.artwork:
             embed.set_thumbnail(url=track.artwork)
@@ -127,7 +137,7 @@ class Music(Cog):
             else:
                 added: int = await player.queue.put_wait(tracks)
 
-            embed.title = '<a:dj:1343976753080569906> Playlist enfileirada! <a:dj:1343976753080569906>'
+            embed.title = 'Playlist enfileirada! <a:dj:1343976753080569906>'
             embed.description = f'**{tracks.name}** - {added} tracks'
 
             if tracks.artwork:
@@ -139,7 +149,7 @@ class Music(Cog):
             else:
                 await player.queue.put_wait(track)
 
-            embed.title = '<a:dj:1343976753080569906> Música enfileirada! <a:dj:1343976753080569906>'
+            embed.title = 'Música enfileirada! <a:dj:1343976753080569906>'
             embed.description = f'[{track}]({track.uri})'
 
         await ctx.followup.send(embed=embed)
@@ -151,14 +161,14 @@ class Music(Cog):
     async def remove(self, ctx: ApplicationContext):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            await ctx.respond("O bot não está conectado. <a:no:1343975451483181076>")
+            await ctx.respond(embed=Embed(description="O bot não está conectado. <a:no:1343975451483181076>"))
             return
 
         try:
             player.queue.delete(player.queue.count - 1)
-            await ctx.respond("Música removida da fila.")
+            await ctx.respond(embed=Embed(description="Música removida da fila. <a:erase:1344810860333502484>"))
         except IndexError:
-            await ctx.respond("Falha ao remover música da fila.")
+            await ctx.respond(embed=Embed(description="Falha ao remover música da fila. <a:injuried:1344811318120550400>"))
 
     @commands.slash_command(name="clear", description="Remove todas as músicas da fila")
     async def clear(
@@ -166,11 +176,11 @@ class Music(Cog):
             ctx: ApplicationContext):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            await ctx.respond("O bot não está conectado. <a:no:1343975451483181076>")
+            await ctx.respond(embed=Embed(description="O bot não está conectado. <a:no:1343975451483181076>"))
             return
 
         player.queue.reset()
-        await ctx.respond("Fila limpa.")
+        await ctx.respond(embed=Embed(description="Fila limpa. <a:clean:1344809977315070088>"))
 
     @commands.slash_command(name="volume", description="Ajusta o volume do bot")
     async def volume(
@@ -180,17 +190,17 @@ class Music(Cog):
     ):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            await ctx.respond("O bot não está conectado. <a:no:1343975451483181076>")
+            await ctx.respond(embed=Embed(description="O bot não está conectado. <a:no:1343975451483181076>"))
             return
 
         await player.set_volume(volume)
-        await ctx.respond(f"Volume definido para {volume}%.")
+        await ctx.respond(f"Volume definido para {volume}%. <a:fix:1344807701158432858>")
 
     @commands.slash_command(name='skip', description="Pula a música")
     async def skip(self, ctx: ApplicationContext):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            await ctx.respond("O bot não está conectado. <a:no:1343975451483181076>")
+            await ctx.respond(embed=Embed(description="O bot não está conectado. <a:no:1343975451483181076>"))
             return
 
         await player.skip(force=True)
@@ -200,7 +210,7 @@ class Music(Cog):
     async def pause(self, ctx: ApplicationContext):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            await ctx.respond("O bot não está conectado. <a:no:1343975451483181076>")
+            await ctx.respond(embed=Embed(description="O bot não está conectado. <a:no:1343975451483181076>"))
             return
 
         await player.pause(not player.paused)
@@ -210,18 +220,18 @@ class Music(Cog):
     async def leave(self, ctx: ApplicationContext):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            await ctx.respond("O bot não está conectado. <a:no:1343975451483181076>")
+            await ctx.respond(embed=Embed(description="O bot não está conectado. <a:no:1343975451483181076>"))
             return
 
         player.cleanup()
         await player.disconnect()
-        await ctx.respond("Bot desconectado. <a:exit:1343976292424618146>")
+        await ctx.respond(embed=Embed(description="Bot desconectado. <a:exit:1343976292424618146>"))
 
     @commands.slash_command(name="shuffle")
     async def shuffle(self, ctx: ApplicationContext):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            await ctx.respond("O bot não está conectado. <a:no:1343975451483181076>")
+            await ctx.respond(embed=Embed(description="O bot não está conectado. <a:no:1343975451483181076>"))
             return
 
         player.queue.shuffle()
@@ -231,11 +241,15 @@ class Music(Cog):
     async def queue(self, ctx: ApplicationContext, *, page: int = 1):
         player: wavelink.Player = typing.cast(wavelink.Player, ctx.voice_client)
         if not player:
-            await ctx.respond("O bot não está conectado. <a:no:1343975451483181076>")
+            await ctx.respond(embed=Embed(description="O bot não está conectado. <a:no:1343975451483181076>"))
+            return
+
+        if len(player.queue) == 0:
+            await ctx.respond(embed=Embed(description="Fila vazia <a:dormir:1344806036200230963>"))
             return
 
         items_per_page = 10
-        pages = math.ceil(len(player.queue) / items_per_page)
+        pages = max(math.ceil(len(player.queue) / items_per_page), 1)
 
         start = (page - 1) * items_per_page
         end = start + items_per_page
