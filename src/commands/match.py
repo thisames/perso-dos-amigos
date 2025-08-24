@@ -81,11 +81,13 @@ def register_match_commands(bot: Bot):
             logger.warning(f"Failed to send message to user {player_discord.name}, cause: {e}")
 
     @bot.slash_command(name="sortear", description="Sortea os times e campeões")
-    async def sort_active_players(ctx, choices_number: Option(int, "Quantidade de campeões", name="opções", default=0,
-                                                              min_value=1, max_value=10)):
+    async def sort_active_players(ctx,
+                                  choices_number: Option(int, "Quantidade de campeões", name="opções", default=0,
+                                                         min_value=1, max_value=10),
+                                  all_seasons: Option(bool, "Usar dados de todas as seasons", name="todas_seasons", default=False)):
         await ctx.response.defer()
         players = await repo.get_active_players()
-        result = generate_team(players, list(data), await repo.get_config("fixed_teams"), choices_number)
+        result = await generate_team(players, list(data), await repo.get_config("fixed_teams"), choices_number, all_seasons)
         match_id = await repo.store_match(result)
 
         blue_embed = create_champion_embed(result.get("blue_team").get("champions"), data, discord.Colour.blue(), 1)
